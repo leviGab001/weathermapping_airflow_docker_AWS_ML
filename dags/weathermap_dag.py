@@ -8,9 +8,12 @@ import json
 import os
 
 # Constants
-WEATHER_API_ENDPOINT = '/data/2.5/weather?q=Portland&APPID='
-S3_BUCKET = ''
-
+AIRFLOW_UID=502
+AIRFLOW_GID=0
+AWS_ACCESS_KEY_ID = 'AKIAZDI3MUPNFMP6EEWJ'
+AWS_SECRET_ACCESS_KEY = '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'
+WEATHER_API_ENDPOINT = '/data/2.5/weather?q=Portland&APPID=873d885e4c75a5107f10d76d8b4057a1'
+S3_BUCKET = 'weathermapping-bucket'
 # Default DAG arguments
 default_args = {
     'owner': 'airflow',
@@ -23,9 +26,9 @@ default_args = {
     'retry_delay': timedelta(minutes=2)
 }
 
-def kelvin_to_fahrenheit(temp_in_kelvin):
-    """Converts Kelvin to Fahrenheit."""
-    return (temp_in_kelvin - 273.15) * 9/5 + 32
+def kelvin_to_celsius(temp_in_kelvin):
+    """Converts Kelvin to Celsius."""
+    return temp_in_kelvin - 273.15
 
 def transform_load_data(task_instance):
     """Transforms and loads weather data."""
@@ -35,10 +38,10 @@ def transform_load_data(task_instance):
     transformed_data = {
         "City": data["name"],
         "Description": data["weather"][0]['description'],
-        "Temperature (F)": kelvin_to_fahrenheit(data["main"]["temp"]),
-        "Feels Like (F)": kelvin_to_fahrenheit(data["main"]["feels_like"]),
-        "Min Temp (F)": kelvin_to_fahrenheit(data["main"]["temp_min"]),
-        "Max Temp (F)": kelvin_to_fahrenheit(data["main"]["temp_max"]),
+        "Temperature (C)": kelvin_to_celsius(data["main"]["temp"]),  # Convert to Celsius
+        "Feels Like (C)": kelvin_to_celsius(data["main"]["feels_like"]),  # Convert to Celsius
+        "Min Temp (C)": kelvin_to_celsius(data["main"]["temp_min"]),  # Convert to Celsius
+        "Max Temp (C)": kelvin_to_celsius(data["main"]["temp_max"]),  # Convert to Celsius
         "Pressure": data["main"]["pressure"],
         "Humidity": data["main"]["humidity"],
         "Wind Speed": data["wind"]["speed"],
@@ -52,12 +55,13 @@ def transform_load_data(task_instance):
 
     # Load data - saving to S3
     aws_credentials = {
-        "key": os.getenv('AWS_ACCESS_KEY_ID'),
-        "secret": os.getenv('AWS_SECRET_ACCESS_KEY'),
-        "token": os.getenv('AWS_SESSION_TOKEN')
+        "key": 'AKIAZDI3MUPNFMP6EEWJ',
+        #"key": os.getenv('AWS_ACCESS_KEY_ID'),
+        "secret": 'YCEceDHrOAPaEWL4osbadvXacXVFBY8J9qXPAC6C',
+        #"token": os.getenv('AWS_SESSION_TOKEN')
     }
-    s3_bucket = 'your-s3-bucket-name'
-    filename = 'current_weather_data_portland_' + datetime.now().strftime("%d%m%Y%H%M%S") + '.csv'
+    s3_bucket = os.getenv('S3_BUCKET')
+    filename = 'current_weather_data' + datetime.now().strftime("%d%m%Y%H%M%S") + '.csv'
     s3_path = f"s3://{s3_bucket}/{filename}"
 
     # Upload to S3

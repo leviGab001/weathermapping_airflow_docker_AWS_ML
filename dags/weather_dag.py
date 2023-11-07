@@ -6,13 +6,13 @@ import json
 import os
 import pandas as pd
 import logging
-from decouple import config 
+from decouple import *  # Import the config function from decouple
 
 # Load configuration from the .env file
 API_KEY = config('API_KEY')
 CITIES = config('CITIES').split(',')  # Split the comma-separated string into a list
-FOLDER_PATH = config('FOLDER_PATH')
-
+RAW_FOLDER_PATH = config('RAW_FOLDER_PATH')
+CLEAN_FOLDER_PATH = config('CLEAN_FOLDER_PATH')
 
 def fetch_and_save_weather_data(cities, api_key, folder_path, **kwargs):
     """
@@ -42,7 +42,7 @@ def fetch_and_save_weather_data(cities, api_key, folder_path, **kwargs):
 
     # Rest of the code for saving data...
 
-def transform_data_into_csv(n_files=None, input_folder=FOLDER_PATH, output_folder='/app/clean_data', filename='data.csv'):
+def transform_data_into_csv(n_files=None, input_folder=RAW_FOLDER_PATH, output_folder=CLEAN_FOLDER_PATH, filename='data.csv'):
     """
     Function to transform JSON weather data into CSV format.
 
@@ -52,7 +52,6 @@ def transform_data_into_csv(n_files=None, input_folder=FOLDER_PATH, output_folde
         output_folder (str): Folder to save transformed data.
         filename (str): Name of the output CSV file.
     """
-    # Rest of the code for transforming data...
 
 # Create a DAG instance
 dag = DAG(
@@ -72,7 +71,7 @@ dag = DAG(
 fetch_and_save_weather_task = PythonOperator(
     task_id='fetch_and_save_weather_task',
     python_callable=fetch_and_save_weather_data,
-    op_args=[CITIES, API_KEY, FOLDER_PATH],
+    op_args=[CITIES, API_KEY, RAW_FOLDER_PATH],
     provide_context=True,
     dag=dag,
 )
@@ -80,7 +79,7 @@ fetch_and_save_weather_task = PythonOperator(
 task_transform_to_csv_all_v2 = PythonOperator(
     task_id='transform_to_csv_all_v2',
     python_callable=transform_data_into_csv,
-    op_args=[None, FOLDER_PATH, "/app/clean_data", 'fulldata.csv'],
+    op_args=[None, RAW_FOLDER_PATH, CLEAN_FOLDER_PATH, 'fulldata.csv'],
     dag=dag
 )
 

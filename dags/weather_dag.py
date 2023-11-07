@@ -68,20 +68,10 @@ def fetch_and_save_weather_data(cities, api_key, folder_path, **kwargs):
 
     print(f"Data saved to {file_path}")
 
-# Create a PythonOperator for Task 1
-fetch_and_save_weather_task = PythonOperator(
-    task_id='fetch_and_save_weather_task',
-    python_callable=fetch_and_save_weather_data,
-    op_args=[cities, api_key, folder_path],
-    provide_context=True,
-    dag=dag,
-)
-
-# Task 2: Transform Data into CSV and Pickle
-def transform_data_into_csv_and_pickle(n_files=None, input_folder='/app/raw_files', output_folder='/app/clean_data', filename='data.csv'):
+def transform_data_into_csv(n_files=None, input_folder='/app/raw_files', output_folder='/app/clean_data', filename='data.csv'):
     """
-    Function to transform JSON weather data into CSV and Pickle formats.
-    
+    Function to transform JSON weather data into CSV format.
+
     Args:
         n_files (int): Number of recent files to process (default is None for all files).
         input_folder (str): Folder containing JSON files.
@@ -94,8 +84,26 @@ def transform_data_into_csv_and_pickle(n_files=None, input_folder='/app/raw_file
 
     dfs = []
     for f in files:
-        with open(os.path.join(input_folder, f), 'r') as file:
-            data_temp = json.load(file)
+        file_path = os.path.join(input_folder, f)
+        
+        # Check if the file is empty
+        if os.path.getsize(file_path) == 0:
+            print(f"Skipping empty file: {file_path}")
+            continue
+
+        with open(file_path, 'r') as file:
+            file_content = file.read()
+            try:
+                data_temp = json.loads(file_content)
+            except json.JSONDecodeError as e:
+                print(f"Error decoding JSON data in file: {file_path}")
+                print(f"Error details: {str(e)}")
+                continue
+
+        if not data_temp:
+            print(f"Skipping empty JSON data in file: {file_path}")
+            continue
+
         for data_city in data_temp:
             dfs.append({
                 'temperature': data_city['main']['temp'],
@@ -105,34 +113,28 @@ def transform_data_into_csv_and_pickle(n_files=None, input_folder='/app/raw_file
             })
 
     df = pd.DataFrame(dfs)
-    
+
     # Save as CSV
     csv_path = os.path.join(output_folder, filename)
     df.to_csv(csv_path, index=False)
 
-    # Save as Pickle
-    pickle_path = os.path.join(output_folder, filename.replace('.csv', '.pkl'))
-    df.to_pickle(pickle_path)
-
-# Update the task to use the new function for Task 2
-task_transform_to_csv_20 = PythonOperator(
-    task_id='transform_to_csv_20',
-    python_callable=transform_data_into_csv_and_pickle,
-    op_args=[20, folder_path, "/app/clean_data", 'data.csv'],
-    dag=dag
+# Create a PythonOperator for Task 1
+fetch_and_save_weather_task = PythonOperator(
+    task_id='fetch_and_save_weather_task',
+    python_callable=fetch_and_save_weather_data,
+    op_args=[cities, api_key, folder_path],
+    provide_context=True,
+    dag=dag,
 )
 
-task_transform_to_csv_all = PythonOperator(
-    task_id='transform_to_csv_all',
-    python_callable=transform_data_into_csv_and_pickle,
+
+task_transform_to_csv_all_v2 = PythonOperator(
+    task_id='transform_to_csv_all_v2',
+    python_callable=transform_data_into_csv,
     op_args=[None, folder_path, "/app/clean_data", 'fulldata.csv'],
     dag=dag
 )
 
-
-
-
 # Define the task dependencies
-fetch_and_save_weather_task >> [task_transform_to_csv_20, task_transform_to_csv_all]
+fetch_and_save_weather_task >> task_transform_to_csv_all_v2
 
-task_transform_to_csv_all

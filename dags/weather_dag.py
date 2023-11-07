@@ -135,10 +135,4 @@ task_transform_to_csv_all = PythonOperator(
 # Define the task dependencies
 fetch_and_save_weather_task >> [task_transform_to_csv_20, task_transform_to_csv_all]
 
-task_transform_to_csv_all >> task_prepare_data
-
-task_prepare_data >> [task_train_linear_regression, task_train_decision_tree, task_train_random_forest]
-
-[task_train_linear_regression, task_train_decision_tree, task_train_random_forest] >> task_select_best_model
-
-task_select_best_model >> task_train_best_model
+task_transform_to_csv_all

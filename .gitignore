@@ -1,4 +1,6 @@
 logs/
 .log
 .env
-.json
+*.json
+*.csv
+*.pickle

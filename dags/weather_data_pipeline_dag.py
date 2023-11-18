@@ -1,4 +1,5 @@
 from datetime import datetime, timedelta
+from airflow.utils.dates import days_ago
 from airflow import DAG
 from airflow.operators.python import PythonOperator
 from extract import fetch_and_save_weather_data
@@ -12,11 +13,11 @@ from train_model import (
 default_args = {
     'owner': 'airflow',
     'depends_on_past': False,
-    'start_date': datetime(2023, 11, 17),
+    'start_date': days_ago(0, minute=1),
     'email_on_failure': False,
     'email_on_retry': False,
     'retries': 1,
-    'retry_delay': timedelta(minutes=5),
+    'retry_delay': timedelta(minutes=1),
 }
 
 # Define the DAG
@@ -24,7 +25,8 @@ dag = DAG(
     'weather_data_pipeline',
     default_args=default_args,
     description='A DAG for processing weather data and training models',
-    schedule_interval=timedelta(days=1),
+    schedule_interval='* * * * *',
+    catchup=False
 )
 
 # Task to fetch and save weather data
@@ -67,7 +69,6 @@ select_best_model_task = PythonOperator(
     dag=dag,
     python_callable=choose_model_and_train,
 )
-
 
 # Task dependencies
 fetch_data_task >> transform_data_task >> [

@@ -1,0 +1,137 @@
+[
+    {
+        "coord": {
+            "lon": 13.4105,
+            "lat": 52.5244
+        },
+        "weather": [
+            {
+                "id": 804,
+                "main": "Clouds",
+                "description": "overcast clouds",
+                "icon": "04d"
+            }
+        ],
+        "base": "stations",
+        "main": {
+            "temp": 278.88,
+            "feels_like": 277.31,
+            "temp_min": 277.6,
+            "temp_max": 280.57,
+            "pressure": 1013,
+            "humidity": 86
+        },
+        "visibility": 10000,
+        "wind": {
+            "speed": 2.06,
+            "deg": 300
+        },
+        "clouds": {
+            "all": 100
+        },
+        "dt": 1700305521,
+        "sys": {
+            "type": 2,
+            "id": 2011538,
+            "country": "DE",
+            "sunrise": 1700289168,
+            "sunset": 1700320221
+        },
+        "timezone": 3600,
+        "id": 2950159,
+        "name": "Berlin",
+        "cod": 200
+    },
+    {
+        "coord": {
+            "lon": 2.3488,
+            "lat": 48.8534
+        },
+        "weather": [
+            {
+                "id": 500,
+                "main": "Rain",
+                "description": "light rain",
+                "icon": "10d"
+            }
+        ],
+        "base": "stations",
+        "main": {
+            "temp": 283.48,
+            "feels_like": 283.02,
+            "temp_min": 282.58,
+            "temp_max": 284.31,
+            "pressure": 1019,
+            "humidity": 94
+        },
+        "visibility": 10000,
+        "wind": {
+            "speed": 5.66,
+            "deg": 200
+        },
+        "rain": {
+            "1h": 0.73
+        },
+        "clouds": {
+            "all": 100
+        },
+        "dt": 1700305570,
+        "sys": {
+            "type": 2,
+            "id": 2041230,
+            "country": "FR",
+            "sunrise": 1700291021,
+            "sunset": 1700323679
+        },
+        "timezone": 3600,
+        "id": 2988507,
+        "name": "Paris",
+        "cod": 200
+    },
+    {
+        "coord": {
+            "lon": -0.1257,
+            "lat": 51.5085
+        },
+        "weather": [
+            {
+                "id": 500,
+                "main": "Rain",
+                "description": "light rain",
+                "icon": "10d"
+            }
+        ],
+        "base": "stations",
+        "main": {
+            "temp": 287.33,
+            "feels_like": 287.18,
+            "temp_min": 286.4,
+            "temp_max": 288.25,
+            "pressure": 1009,
+            "humidity": 91
+        },
+        "visibility": 10000,
+        "wind": {
+            "speed": 4.63,
+            "deg": 220
+        },
+        "rain": {
+            "1h": 0.11
+        },
+        "clouds": {
+            "all": 100
+        },
+        "dt": 1700305553,
+        "sys": {
+            "type": 2,
+            "id": 268730,
+            "country": "GB",
+            "sunrise": 1700292183,
+            "sunset": 1700323705
+        },
+        "timezone": 0,
+        "id": 2643743,
+        "name": "London",
+        "cod": 200
+    }
+]

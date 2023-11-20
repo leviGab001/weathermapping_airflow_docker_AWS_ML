@@ -1,5 +1,4 @@
 import os
-import io
 import json
 import requests
 import pandas as pd
@@ -14,42 +13,19 @@ from airflow import DAG
 from airflow.operators.python_operator import PythonOperator
 from airflow.utils.dates import days_ago
 from airflow.hooks.S3_hook import S3Hook
-import boto3
-from botocore.exceptions import ClientError
-
 
 # Configuration for API and file paths
 API_URL = os.environ.get('OPENWEATHER_API_URL', "https://api.openweathermap.org/data/2.5/weather")
-#API_KEY = os.environ['OPENWEATHER_API_KEY']
+API_KEY = os.environ['OPENWEATHER_API_KEY']
 CITIES = ['berlin', 'paris', 'london']
+RAW_FOLDER_PATH = '/app/raw_files'
+CLEAN_FOLDER_PATH  = '/app/clean_data'
+DATASET_PATH = '/app/clean_data/latest_data.csv'
+BEST_MODEL_PATH = '/app/clean_data/best_model.pickle'
 BUCKET = 'weathermapping-bucket'
-RAW_BUCKET_PATH = 's3://weathermapping-bucket/raw_data'
-PROCESSED_BUCKET_PATH = 's3://weathermapping-bucket/processed_data'
-BEST_MODEL_KEY = 'best_model.pickle'
-FULL_DATASET_KEY = 'processed_data/full_dataset.csv'
-LATEST_DATA_KEY = 'processed_data/latest_data.csv'
-RAW_DATA_PREFIX = 'raw_data/'
 
 # Setup logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
-
-def get_secret():
-    secret_name = "weather_api_secret"
-    region_name = "us-east-1"
-
-    # Create a Secrets Manager client
-    session = boto3.session.Session()
-    client = session.client(service_name='secretsmanager', region_name=region_name)
-
-    try:
-        get_secret_value_response = client.get_secret_value(SecretId=secret_name)
-    except ClientError as e:
-        raise e
-
-    secret = get_secret_value_response['SecretString']
-    return secret
-
-API_KEY = get_secret()
 
 # Function to fetch and save weather data
 def fetch_and_save_weather_data():
@@ -69,113 +45,89 @@ def fetch_and_save_weather_data():
 
     now_time = datetime.now().strftime("%Y-%m-%d %H:%M")
     filename = f"{now_time}.json"
-    local_filepath = os.path.join('/tmp', filename)
+    filepath = os.path.join(RAW_FOLDER_PATH, filename)
 
     try:
-        with open(local_filepath, 'w') as f:
+        with open(filepath, 'w') as f:
             json.dump(all_data, f, indent=4)
-        s3_hook = S3Hook('aws_conn')
-        s3_hook.load_file(local_filepath, key=f'raw_data/{filename}', bucket_name=BUCKET, replace=True)
-        logging.info(f"Data uploaded to S3 at {RAW_BUCKET_PATH}/{filename}")
-    except Exception as e:
-        logging.error(f"Error: {e}")
+        logging.info(f"Data saved to {filepath}")
+    except IOError as e:
+        logging.error(f"File IO Error: {e}")
 
+# Function to transform data into CSV
 def transform_data_into_csv():
-    s3_hook = S3Hook('aws_conn')
-
-    # List and sort raw data files in S3
-    list_of_files = s3_hook.list_keys(bucket_name=BUCKET, prefix=RAW_DATA_PREFIX)
-    if not list_of_files:
-        logging.warning("No raw data files found in S3.")
-        return
+    parent_folder = RAW_FOLDER_PATH
+    files = sorted([f for f in os.listdir(parent_folder) if f.endswith('.json')], reverse=True)
 
     dfs = []
-    for file_key in sorted(list_of_files, reverse=True):
-        # Read each file directly into memory
-        raw_data = s3_hook.read_key(key=file_key, bucket_name=BUCKET)
-        raw_data_io = io.StringIO(raw_data)
-
+    for f in files:
         try:
-            data_temp = json.load(raw_data_io)
-            for data_city in data_temp:
-                temperature_kelvin = data_city['main']['temp']
-                temperature_celsius = temperature_kelvin - 273.15  # Kelvin to Celsius
-                dfs.append({
-                    'temperature': round(temperature_celsius, 2),
-                    'city': data_city['name'],
-                    'pressure': data_city['main']['pressure'],
-                    'date': os.path.basename(file_key).split('.')[0]
-                })
-        except json.JSONDecodeError as e:
-            logging.error(f"Error processing file {os.path.basename(file_key)}: {e}")
+            with open(os.path.join(parent_folder, f), 'r') as file:
+                data_temp = json.load(file)
+                for data_city in data_temp:
+                    temperature_kelvin = data_city['main']['temp']
+                    temperature_celsius = temperature_kelvin - 273.15  # Kelvin to Celsius
+                    dfs.append({
+                        'temperature': round(temperature_celsius, 2),
+                        'city': data_city['name'],
+                        'pressure': data_city['main']['pressure'],
+                        'date': f.split('.')[0]
+                    })
+        except (IOError, json.JSONDecodeError) as e:
+            logging.error(f"Error processing file {f}: {e}")
 
     if not dfs:
         logging.warning("No data to process.")
         return
 
     df = pd.DataFrame(dfs)
+    os.makedirs(CLEAN_FOLDER_PATH , exist_ok=True)
+    full_data_path = os.path.join(CLEAN_FOLDER_PATH , 'full_data.csv')
+    df.to_csv(full_data_path, index=False)
+    logging.info(f"All data saved to {full_data_path}.")
 
-    # Convert full dataset DataFrame to CSV and upload to S3
-    full_csv_buffer = io.StringIO()
-    df.to_csv(full_csv_buffer, index=False)
-    full_csv_buffer.seek(0)
-    s3_hook.load_string(string_data=full_csv_buffer.getvalue(), key=FULL_DATASET_KEY, bucket_name=BUCKET, replace=True)
-    logging.info("Full dataset uploaded to S3.")
-
-    # Process latest 20 records for each city
     df_grouped = df.groupby('city').apply(lambda x: x.sort_values('date', ascending=False).head(20)).reset_index(drop=True)
-
-    # Convert latest data DataFrame to CSV and upload to S3
-    latest_csv_buffer = io.StringIO()
-    df_grouped.to_csv(latest_csv_buffer, index=False)
-    latest_csv_buffer.seek(0)
-    s3_hook.load_string(string_data=latest_csv_buffer.getvalue(), key=LATEST_DATA_KEY, bucket_name=BUCKET, replace=True)
-    logging.info("Latest data for each city uploaded to S3.")
-
-
+    latest_data_path = os.path.join(CLEAN_FOLDER_PATH , 'latest_data.csv')
+    df_grouped.to_csv(latest_data_path, index=False)
+    logging.info(f"Latest 20 records for each city saved to {latest_data_path}.")
 
 # Functions for model training and selection
 def compute_model_score(model, X, y):
     scores = cross_val_score(model, X, y, cv=3, scoring='neg_mean_squared_error')
     return -scores.mean()
 
-def train_and_save_model(model, X, y):
+def train_and_save_model(model, X, y, path_to_model):
     model.fit(X, y)
+    dump(model, path_to_model)
+    logging.info(f'{str(model)} saved at {path_to_model}')
 
-    local_model_path = '/tmp/best_model.pickle'
-    dump(model, local_model_path)
-    s3_hook = S3Hook('aws_conn')
-    s3_hook.load_file(local_model_path, key=BEST_MODEL_KEY, bucket_name=BUCKET, replace=True)
-    logging.info(f'Model uploaded to S3 at {PROCESSED_BUCKET_PATH}/{BEST_MODEL_KEY}')
-
-def prepare_data():
-    s3_hook = S3Hook('aws_conn')
-    latest_data_key = LATEST_DATA_KEY
-
-    # Read latest data CSV directly from S3 into DataFrame
-    csv_data = s3_hook.read_key(key=latest_data_key, bucket_name=BUCKET)
-    csv_buffer = io.StringIO(csv_data)
-    df = pd.read_csv(csv_buffer)
+def prepare_data(path_to_data=DATASET_PATH):
+    df = pd.read_csv(path_to_data)
     df.sort_values(['city', 'date'], ascending=True, inplace=True)
 
     dfs = []
     for c in df['city'].unique():
         df_temp = df[df['city'] == c].copy()
+
+        # Creating target and features
         df_temp['target'] = df_temp['temperature'].shift(1)
         for i in range(1, 10):
             df_temp[f'temp_m-{i}'] = df_temp['temperature'].shift(-i)
+
+        # Deleting rows with null values
         df_temp.dropna(inplace=True)
         dfs.append(df_temp)
 
+    # Concatenating datasets
     df_final = pd.concat(dfs, axis=0, ignore_index=True)
     df_final.drop(['date'], axis=1, inplace=True)
+
+    # Creating dummies
     df_final = pd.get_dummies(df_final)
     features = df_final.drop(['target'], axis=1)
     target = df_final['target']
 
     return features, target
-
-
 
 def compute_score_and_save(model_name, task_instance):
     X, y = prepare_data()
@@ -188,7 +140,6 @@ def compute_score_and_save(model_name, task_instance):
     score = compute_model_score(model_mapping[model_name], X, y)
     task_instance.xcom_push(key=model_name, value=score)
 
-
 def choose_model_and_train(task_instance):
     X, y = prepare_data()
     model_mapping = {
@@ -197,20 +148,25 @@ def choose_model_and_train(task_instance):
         "RandomForestRegressor": RandomForestRegressor(),
     }
 
+    # Retrieving scores from previous tasks
     model_performance = {
         "LinearRegression": task_instance.xcom_pull(key="LinearRegression", task_ids=['train_linear_regression_model'])[0],
         "DecisionTreeRegressor": task_instance.xcom_pull(key="DecisionTreeRegressor", task_ids=['train_decision_tree_model'])[0],
         "RandomForestRegressor": task_instance.xcom_pull(key="RandomForestRegressor", task_ids=['train_random_forest_model'])[0],
     }
 
+    # Filtering out None values
     model_performance = {k: v for k, v in model_performance.items() if v is not None}
 
+    # Validating model performance data
     if not model_performance:
         raise ValueError("All models resulted in None performance scores.")
 
+    # Selecting the best model
     best_model = max(model_performance, key=model_performance.get)
-    train_and_save_model(model_mapping[best_model], X, y)
 
+    # Training and saving the best model
+    train_and_save_model(model_mapping[best_model], X, y, BEST_MODEL_PATH)
 
 # Apache Airflow DAG definition
 default_args = {
@@ -218,12 +174,12 @@ default_args = {
     'depends_on_past': False,
     'email_on_failure': False,
     'email_on_retry': False,
-    'retries': 10,
+    'retries': 1,
     'retry_delay': timedelta(minutes=1),
 }
 
 dag = DAG('weathermap_data_pipeline', 
-          start_date=days_ago(1),
+          start_date= days_ago(1),
           default_args=default_args, 
           description='A DAG for processing weather data and training models', 
           schedule_interval='*/30 * * * *', 
@@ -256,10 +212,21 @@ select_best_model_task = PythonOperator(task_id='select_best_model',
                                         python_callable=choose_model_and_train, 
                                         dag=dag)
 
+def upload_to_s3() -> None:
+    hook = S3Hook('aws_conn')
+    hook.load_file(
+        filename=BEST_MODEL_PATH,
+        key='best_model.pickle',
+        bucket_name=BUCKET,
+        replace=True
+)
+
+task_upload_to_s3 = PythonOperator(
+    task_id='upload_to_s3',
+    python_callable=upload_to_s3
+)
+
 fetch_data_task >> transform_data_task >> [train_linear_regression_model_task, 
                                            train_decision_tree_model_task, 
                                            train_random_forest_model_task] >> select_best_model_task
-
-
-
-
+select_best_model_task >> task_upload_to_s3

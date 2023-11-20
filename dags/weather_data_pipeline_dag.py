@@ -17,9 +17,9 @@ from airflow.utils.dates import days_ago
 API_URL = os.environ.get('OPENWEATHER_API_URL', "https://api.openweathermap.org/data/2.5/weather")
 API_KEY = os.environ['OPENWEATHER_API_KEY']
 CITIES = ['berlin', 'paris', 'london']
-PATH_RAW = '/app/raw_files'
-PATH_CLEAN = '/app/clean_data'
-FULL_DATASET_PATH = '/app/clean_data/latest_data.csv'
+RAW_FOLDER_PATH = '/app/raw_files'
+CLEAN_FOLDER_PATH  = '/app/clean_data'
+DATASET_PATH = '/app/clean_data/latest_data.csv'
 BEST_MODEL_PATH = '/app/clean_data/best_model.pickle'
 
 # Setup logging
@@ -43,7 +43,7 @@ def fetch_and_save_weather_data():
 
     now_time = datetime.now().strftime("%Y-%m-%d %H:%M")
     filename = f"{now_time}.json"
-    filepath = os.path.join(PATH_RAW, filename)
+    filepath = os.path.join(RAW_FOLDER_PATH, filename)
 
     try:
         with open(filepath, 'w') as f:
@@ -54,7 +54,7 @@ def fetch_and_save_weather_data():
 
 # Function to transform data into CSV
 def transform_data_into_csv():
-    parent_folder = PATH_RAW
+    parent_folder = RAW_FOLDER_PATH
     files = sorted([f for f in os.listdir(parent_folder) if f.endswith('.json')], reverse=True)
 
     dfs = []
@@ -79,13 +79,13 @@ def transform_data_into_csv():
         return
 
     df = pd.DataFrame(dfs)
-    os.makedirs(PATH_CLEAN, exist_ok=True)
-    full_data_path = os.path.join(PATH_CLEAN, 'full_data.csv')
+    os.makedirs(CLEAN_FOLDER_PATH , exist_ok=True)
+    full_data_path = os.path.join(CLEAN_FOLDER_PATH , 'full_data.csv')
     df.to_csv(full_data_path, index=False)
     logging.info(f"All data saved to {full_data_path}.")
 
     df_grouped = df.groupby('city').apply(lambda x: x.sort_values('date', ascending=False).head(20)).reset_index(drop=True)
-    latest_data_path = os.path.join(PATH_CLEAN, 'latest_data.csv')
+    latest_data_path = os.path.join(CLEAN_FOLDER_PATH , 'latest_data.csv')
     df_grouped.to_csv(latest_data_path, index=False)
     logging.info(f"Latest 20 records for each city saved to {latest_data_path}.")
 
@@ -99,7 +99,7 @@ def train_and_save_model(model, X, y, path_to_model):
     dump(model, path_to_model)
     logging.info(f'{str(model)} saved at {path_to_model}')
 
-def prepare_data(path_to_data=FULL_DATASET_PATH):
+def prepare_data(path_to_data=DATASET_PATH):
     df = pd.read_csv(path_to_data)
     df.sort_values(['city', 'date'], ascending=True, inplace=True)
 

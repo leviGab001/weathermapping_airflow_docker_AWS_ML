@@ -4,3 +4,4 @@ logs/
 *.json
 *.csv
 .vscode
+.DS_Store

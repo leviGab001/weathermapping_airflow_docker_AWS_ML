@@ -3,4 +3,4 @@ logs/
 .env
 *.json
 *.csv
-*.pickle
+.vscode

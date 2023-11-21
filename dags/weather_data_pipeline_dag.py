@@ -14,13 +14,11 @@ from airflow import DAG
 from airflow.operators.python_operator import PythonOperator
 from airflow.utils.dates import days_ago
 from airflow.hooks.S3_hook import S3Hook
-import boto3
-from botocore.exceptions import ClientError
 
 
 # Configuration for API and file paths
 API_URL = os.environ.get('OPENWEATHER_API_URL', "https://api.openweathermap.org/data/2.5/weather")
-#API_KEY = os.environ['OPENWEATHER_API_KEY']
+API_KEY = os.environ['OPENWEATHER_API_KEY']
 CITIES = ['berlin', 'paris', 'london']
 BUCKET = 'weathermapping-bucket'
 RAW_BUCKET_PATH = 's3://weathermapping-bucket/raw_data'
@@ -32,24 +30,6 @@ RAW_DATA_PREFIX = 'raw_data/'
 
 # Setup logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
-
-def get_secret():
-    secret_name = "weather_api_secret"
-    region_name = "us-east-1"
-
-    # Create a Secrets Manager client
-    session = boto3.session.Session()
-    client = session.client(service_name='secretsmanager', region_name=region_name)
-
-    try:
-        get_secret_value_response = client.get_secret_value(SecretId=secret_name)
-    except ClientError as e:
-        raise e
-
-    secret = get_secret_value_response['SecretString']
-    return secret
-
-API_KEY = get_secret()
 
 # Function to fetch and save weather data
 def fetch_and_save_weather_data():
